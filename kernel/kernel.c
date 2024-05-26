@@ -20,8 +20,8 @@ int main() {
             break;
         }
 
-        else if (strcmp(input,"project") == 0){
-            project();
+        else if (strcmp(input,"process") == 0){
+            process();
         }
 
         else system(input);

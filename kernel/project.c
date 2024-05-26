@@ -122,51 +122,11 @@ void allocate_memory(Process *proc, int logical_page_id, const char *content) {
 }
 
 // 가상 주소 시각적 표시 함수
-void print_virtual_address(Process *proc, unsigned int virtual_address) {
-    int logical_page_id = (virtual_address / PAGE_SIZE) % NUM_PAGES;
-    int offset = virtual_address % PAGE_SIZE;
-
-    if (logical_page_id >= NUM_PAGES || proc->page_table[logical_page_id]->valid == 0) {
-        printf("Logical Page ID out of bounds or page not allocated\n");
-        return;
-    }
-
-    printf("Process %d: Virtual Address 0x%04x (VPN: 0x%02x, Offset: 0x%02x)\n",
-           proc->pid, virtual_address, logical_page_id, offset);
-}
 
 // 물리 주소 시각적 표시 함수
-void print_physical_address(Process *proc, unsigned int virtual_address) {
-    int logical_page_id = (virtual_address / PAGE_SIZE) % NUM_PAGES;
-    int offset = virtual_address % PAGE_SIZE;
-
-    if (logical_page_id >= NUM_PAGES || proc->page_table[logical_page_id]->valid == 0) {
-        printf("Logical Page ID out of bounds or page not allocated\n");
-        return;
-    }
-
-    int frame_number = proc->page_table[logical_page_id]->frame_number;
-    unsigned int physical_address = frame_number * PAGE_SIZE + offset;
-
-    printf("Process %d: Virtual Address 0x%04x -> Physical Address 0x%04x (PFN: 0x%02x, Offset: 0x%02x)\n",
-           proc->pid, virtual_address, physical_address, frame_number, offset);
-}
 
 // 메모리 접근 함수
-void access_memory(Process *proc, unsigned int virtual_address) {
-    int logical_page_id = (virtual_address / PAGE_SIZE) % NUM_PAGES;
-    int offset = virtual_address % PAGE_SIZE;
 
-    if (logical_page_id >= NUM_PAGES || proc->page_table[logical_page_id]->valid == 0) {
-        printf("Logical Page ID out of bounds or page not allocated\n");
-        return;
-    }
-
-    int frame_number = proc->page_table[logical_page_id]->frame_number;
-    Page *page = physical_memory[frame_number];
-    printf("Process %d: Accessing Virtual Address 0x%04x (Page %d, Frame %d, Offset 0x%02x) - Content: %c\n",
-           proc->pid, virtual_address, logical_page_id, frame_number, offset, page->content[offset]);
-}
 
 // 페이지 테이블 출력 함수
 void print_page_table(Process *proc) {
@@ -193,7 +153,7 @@ void free_process(Process *proc) {
     free(proc);
 }
 
-int project() {
+int process() {
     srand(time(NULL)); // 랜덤 시드 초기화
 
     // 물리 메모리 초기화
@@ -223,22 +183,6 @@ int project() {
     print_page_table(proc_sub);
     printf("\n");
     // 가상 주소 시각적 표시
-    print_virtual_address(proc_add, 0x000);
-    print_virtual_address(proc_add, 0x100);
-    print_virtual_address(proc_sub, 0x000);
-    print_virtual_address(proc_sub, 0x100);
-
-    // 물리 주소 시각적 표시
-    print_physical_address(proc_add, 0x000);
-    print_physical_address(proc_add, 0x100);
-    print_physical_address(proc_sub, 0x000);
-    print_physical_address(proc_sub, 0x100);
-
-    // 메모리 접근
-    access_memory(proc_add, 0x000);
-    access_memory(proc_add, 0x100);
-    access_memory(proc_sub, 0x000);
-    access_memory(proc_sub, 0x100);
 
     // 프로세스 해제
     free_process(proc_add);
