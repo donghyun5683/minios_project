@@ -9,6 +9,35 @@ Page *physical_memory[NUM_FRAMES];
 int frame_bitmap[NUM_FRAMES];
 PCB *pcb_memory[PCB_FRAMES];
 int pcb_frame_bitmap[PCB_FRAMES];
+SecondaryStorage secondary_storage;
+int block_bitmap[SECONDARY_STORAGE_BLOCKS];
+
+// void print_memory_status(int occupied_frames[], int num_occupied_frames) {
+//     int i, j;
+//     int is_occupied;
+
+//     printf("+--------+--------+--------+--------+--------+--------+--------+--------+\n");
+//     for (i = 0; i < NUM_FRAMES; i++) {
+//         is_occupied = 0;
+//         for (j = 0; j < num_occupied_frames; j++) {
+//             if (occupied_frames[j] == i) {
+//                 is_occupied = 1;
+//                 break;
+//             }
+//         }
+//         if (is_occupied) {
+//             printf("|occupied");
+//         } else {
+//             printf("|  free  ");
+//         }
+//     }
+//     printf("|\n");
+//     printf("+--------+--------+--------+--------+--------+--------+--------+--------+\n");
+// }
+
+
+
+
 
 // schedular
 void print_queue(CircularQueue *queue) {
@@ -188,6 +217,7 @@ int allocate_frame() {
     }
 
     if (free_count == 0) {
+        printf("No available frames\n");
         return -1;
     }
 
@@ -203,6 +233,35 @@ int allocate_frame() {
 
     return frame_number;
 }
+
+int allocate_random_block() {
+    int available_blocks[SECONDARY_STORAGE_BLOCKS];
+    int count = 0;
+
+    for (int i = 0; i < SECONDARY_STORAGE_BLOCKS; i++) {
+        if (block_bitmap[i] == 0) {
+            available_blocks[count++] = i;
+        }
+    }
+
+    if (count == 0) {
+        printf("No available blocks\n");
+        return -1;
+    }
+
+    printf("Available blocks: ");
+    for (int i = 0; i < count; i++) {
+        printf("%d ", available_blocks[i]);
+    }
+    printf("\n");
+
+    int random_index = rand() % count;
+    int block_number = available_blocks[random_index];
+    block_bitmap[block_number] = 1;
+
+    return block_number;
+}
+
 
 
 //process create
@@ -231,42 +290,139 @@ Process* create_process(int pid,unsigned char *memory) {
     return proc;
 }
 
-void allocate_memory(Process *proc, int logical_page_id, unsigned char* memory) {
+
+
+
+// void allocate_memory_combined(Process *proc, int logical_page_id, unsigned char* primary_memory, unsigned char* secondary) {
+//     if (logical_page_id >= NUM_PAGES) {
+//         printf("Logical Page ID out of bounds\n");
+//         return;
+//     }
+
+//     int block_number = allocate_random_block();
+//     // if (block_number == -1) {
+//     //     printf("No free blocks available in secondary storage\n");
+//     //     return;
+//     // }
+
+//     Page *page = (Page*)malloc(sizeof(Page));
+//     page->page_id = logical_page_id;
+//     snprintf(page->content, PAGE_SIZE, "Process %d, Page %d content", proc->pid, logical_page_id);
+
+//     int frame_number = allocate_frame();
+//     if (frame_number == -1) {
+//         printf("No free frames available\n");
+   
+
+//         proc->page_table[logical_page_id]->valid = 0;
+//         proc->page_table[logical_page_id]->is_in_secondary_storage = 0;
+//         secondary_storage.blocks[block_number] = page;
+//         proc->page_table[logical_page_id]->block_number = block_number;
+
+
+//         return;
+//     }
+//     else {}
+
+   
+
+//     // 메인 메모리에 페이지 할당
+//     physical_memory[frame_number] = page;
+//     proc->vm->pages[logical_page_id] = page;
+//     proc->page_table[logical_page_id]->valid = 1;
+//     proc->page_table[logical_page_id]->frame_number = frame_number;
+//     proc->page_table[logical_page_id]->is_in_secondary_storage = 1;
+
+//     // 보조 저장 장치에 페이지 할당
+//     secondary_storage.blocks[block_number] = page;
+//     proc->page_table[logical_page_id]->block_number = block_number;
+
+//     // 실제 메모리 주소 계산
+//     int memory_address = PHYSICAL_ADDRESS(frame_number);
+//     printf("Process %d: Allocated Page %d to Frame %d at Memory Address %p\n", proc->pid, logical_page_id, frame_number, primary_memory + memory_address);
+//     printf("Process %d(Page ID %d): Virtual Address [0x%04x - 0x%04x]\n", proc->pid, logical_page_id, logical_page_id * PAGE_SIZE, (logical_page_id + 1) * PAGE_SIZE - 1);
+//     printf("Process %d: Also allocated Page %d to Secondary Storage Block %d\n", proc->pid, logical_page_id, block_number);
+// }
+void allocate_memory_combined(Process *proc, int logical_page_id, unsigned char* primary_memory, unsigned char* secondary) {
     if (logical_page_id >= NUM_PAGES) {
         printf("Logical Page ID out of bounds\n");
         return;
     }
+
     int frame_number = allocate_frame();
-    if (frame_number == -1) {
-        printf("No free frames available\n");
-        return;
-    }
+    int block_number;
+
     Page *page = (Page*)malloc(sizeof(Page));
     page->page_id = logical_page_id;
+   
+    proc->page_table[logical_page_id]->block_number = -1;
     snprintf(page->content, PAGE_SIZE, "Process %d, Page %d content", proc->pid, logical_page_id);
-    physical_memory[frame_number] = page;
+    block_number = allocate_random_block();
+    if (frame_number == -1) {
+        // 메인 메모리에 빈 프레임이 없는 경우
+        // block_number = allocate_random_block();
+        // if (block_number == -1) {
+        //     printf("No free blocks available in secondary storage\n");
+        //     free(page);
+        //     return;
+        // }
+        // 보조 저장 장치에 페이지 할당
+        secondary_storage.blocks[block_number] = page;
+        proc->page_table[logical_page_id]->valid = 0;
+        proc->page_table[logical_page_id]->frame_number = -1;
+        proc->page_table[logical_page_id]->block_number = block_number;
+        printf("Process %d: Allocated Page %d to Secondary Storage Block %d\n", proc->pid, logical_page_id, block_number);
+    } else {
+        // 메인 메모리에 페이지 할당
+        physical_memory[frame_number] = page;
+        proc->vm->pages[logical_page_id] = page;
+        proc->page_table[logical_page_id]->valid = 1;
+        proc->page_table[logical_page_id]->frame_number = frame_number;
+         // 메모리에만 할당된 경우
 
-    proc->vm->pages[logical_page_id] = page;
-    proc->page_table[logical_page_id]->valid = 1;
-    proc->page_table[logical_page_id]->frame_number = frame_number;
+        // 보조 저장 장치에도 페이지 할당
+        // block_number = allocate_random_block();
+        // if (block_number == -1) {
+        //     printf("No free blocks available in secondary storage\n");
+        //     free(page);
+        //     return;
+        // }
+        secondary_storage.blocks[block_number] = page;
+        proc->page_table[logical_page_id]->block_number = block_number;
+       
 
-    // 실제 메모리 주소 계산
-    //unsigned char *frame_memory_address = memory + (frame_number * PAGE_SIZE);
-    int memory_address = PHYSICAL_ADDRESS(frame_number);
-    printf("Process %d: Allocated Page %d to Frame %d at Memory Address %p\n", proc->pid, logical_page_id, frame_number, memory + memory_address);
-
-    printf("Process %d(Page ID %d): Virtual Address [0x%04x - 0x%04x] \n",
-           proc->pid, logical_page_id, logical_page_id * PAGE_SIZE, (logical_page_id + 1) * PAGE_SIZE - 1);
+        // 실제 메모리 주소 계산
+        int memory_address = PHYSICAL_ADDRESS(frame_number);
+        printf("Process %d: Allocated Page %d to Frame %d at Memory Address %p\n", proc->pid, logical_page_id, frame_number, primary_memory + memory_address);
+        printf("Process %d(Page ID %d): Virtual Address [0x%04x - 0x%04x]\n", proc->pid, logical_page_id, logical_page_id * PAGE_SIZE, (logical_page_id + 1) * PAGE_SIZE - 1);
+        printf("Process %d: Also allocated Page %d to Secondary Storage Block %d\n", proc->pid, logical_page_id, block_number);
+    }
 }
 
 void print_page_table(Process *proc) {
-    printf("Process %d Page Table:\n", proc->pid);
+    printf("Page Table for Process %d:\n", proc->pid);
+    printf("Logical Page ID | Frame Number | Block Number | Valid\n");
+    printf("-------------------------------------------------------------\n");
+
     for (int i = 0; i < NUM_PAGES; i++) {
-        if (proc->page_table[i]->valid) {
-            printf("Logical Page %d -> Frame %d\n", i, proc->page_table[i]->frame_number);
+        if (proc->page_table[i]->frame_number != -1 || proc->page_table[i]->block_number != -1) {
+            printf("%15d | %12d | %12d | %5d\n",
+                   i,
+                   proc->page_table[i]->frame_number,
+                   proc->page_table[i]->block_number,
+                   proc->page_table[i]->valid);
         }
     }
 }
+
+// void print_page_table(Process *proc) {
+//     printf("Process %d Page Table:\n", proc->pid);
+//     for (int i = 0; i < NUM_PAGES; i++) {
+//         if (proc->page_table[i]->valid) {
+//             printf("Logical Page %.2d -> Frame %.2d / Block %.2d / Valid %d\n" , i, proc->page_table[i]->frame_number,proc->page_table[i]->block_number,proc->page_table[i]->valid);
+//         }
+//     }
+// }
 
 void visualize_pcb(PCB *pcb, int frame_number) {
     printf("PCB in PCB Frame %d - PID: %d, State: %s\n", frame_number, pcb->pid, pcb->state);
@@ -308,8 +464,18 @@ void print_frame_status() {
             printf("Frame %d: Free\n", i);
         }
     }
+
+    printf("\nSecondary stoarge:\n");
+    for (int i = 0; i < SECONDARY_STORAGE_BLOCKS; i++) {
+        if (block_bitmap[i]) {
+            printf("Block %d: Occupied\n", i);
+        } else {
+            printf("Block %d: Free\n", i);
+        }
+    }
 }
-Process** initialize_processes(int* process_count, CircularQueue *queue, unsigned char *memory) {
+
+Process** initialize_processes(int* process_count, CircularQueue *queue, unsigned char *memory,unsigned char *secondary) {
     srand(time(NULL));
     int num;
     printf("\n프로세스 개수 입력: ");
@@ -333,19 +499,25 @@ Process** initialize_processes(int* process_count, CircularQueue *queue, unsigne
         enqueue(queue, processes[i]->pcb_frame_number);
     }
 
-    for(int i =0 ; i< *process_count; i++)
-    {
-        int page_num = 1+ rand()%4;
-        for(int j =0; j < page_num; j++)
-        {
-            allocate_memory(processes[i],j,memory);
-        }
-       
-    }
+   
 
+
+    for (int i = 0; i < *process_count; i++) {
+    int page_num = 1 + rand() % 4; // 각 프로세스에 할당할 페이지 수를 1에서 4 사이의 무작위 값으로 설정
+    for (int j = 0; j < page_num; j++) {
+            allocate_memory_combined(processes[i], j, memory, secondary); // 메모리에 할당
+
+        }
+    }
     printf("\n");
     print_frame_status();
     printf("\n");
     return processes;
 }
 
+void initialize_secondary_storage() {
+    for (int i = 0; i < SECONDARY_STORAGE_BLOCKS; i++) {
+        secondary_storage.blocks[i] = NULL;
+        secondary_storage.block_bitmap[i] = 0;
+    }
+}
